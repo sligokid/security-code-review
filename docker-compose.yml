@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  db:
+    image: land-registry-auth-db
+    container_name: land-registry-auth-db-local
+    build:
+          context: src/main/docker/db
+    command: ['mysqld', '--require-secure-transport=OFF']
+    ports:
+      - 3306:3306
+    restart: always

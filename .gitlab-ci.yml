@@ -1,0 +1,193 @@
+image: docker:latest
+services:
+  - docker:dind
+
+variables:
+  DOCKER_DRIVER: overlay
+  SPRING_PROFILES_ACTIVE: gitlab-ci
+
+stages:
+  - stop
+  - db-build
+  - db-run
+  - app-package-test
+  - app-build
+  - app-deploy
+  - cleanup
+  - trigger-web-tests
+
+################## DEV ##################
+stop-app-dev:
+  tags:
+    - DEV
+  allow_failure: true
+  stage: stop
+  script:
+  - docker stop land-registry-auth
+  only:
+  - develop
+
+stop-db-dev:
+  tags:
+    - DEV
+  allow_failure: true
+  stage: stop
+  script:
+  - docker stop land-registry-auth-db
+  only:
+  - develop
+
+build-dev:
+  tags:
+    - DEV
+  stage: db-build
+  script:
+  - docker build -t land-registry-auth-db src/main/docker/db/
+  only:
+  - develop
+
+db-run-dev:
+  tags:
+    - DEV
+  stage: db-run
+  script:
+  - docker run -d --name land-registry-auth-db --rm -p3306:3306 land-registry-auth-db
+  only:
+  - develop
+
+mvn-jdk-8-dev:
+  tags:
+    - DEV
+  image: maven:3-jdk-8
+  stage: app-package-test
+  script: "./mvnw verify -B"
+  artifacts:
+    paths:
+      - target/*.jar
+  only:
+  - develop
+
+app-build-dev:
+  tags:
+    - DEV
+  stage: app-build
+  script:
+  - docker build -f src/main/docker/dev/Dockerfile . -t land-registry-auth
+  only:
+  - develop
+
+app-deploy-dev:
+  tags:
+    - DEV
+  stage: app-deploy
+  script:
+  - docker run -d --name land-registry-auth --rm -p 9501:3501 --link land-registry-auth-db:db land-registry-auth
+  environment:
+    name: DEV
+    url: http://poc-dev.com:9501/swagger-ui.html
+  only:
+  - develop
+
+cleanup-dev:
+  tags:
+    - DEV
+  allow_failure: true
+  stage: cleanup
+  script:
+  - docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
+  only:
+  - develop
+
+qa:
+  tags:
+    - DEV
+  allow_failure: true
+  stage: trigger-web-tests
+  script:
+    - "curl -X POST -F token=033908d2ab08199699ee33e9693f60 -F ref=develop https://gitlab.com/api/v4/projects/10976429/trigger/pipeline"
+  only:
+    - develop
+
+################## UAT ##################
+stop-app-uat:
+  tags:
+    - UAT
+  allow_failure: true
+  stage: stop
+  script:
+  - docker stop land-registry-auth
+  only:
+  - staging
+
+stop-db-uat:
+  tags:
+    - UAT
+  allow_failure: true
+  stage: stop
+  script:
+  - docker stop land-registry-auth-db
+  only:
+  - staging
+
+build-uat:
+  tags:
+    - UAT
+  stage: db-build
+  script:
+  - docker build -t land-registry-auth-db src/main/docker/db/
+  only:
+  - staging
+
+db-run-uat:
+  tags:
+    - UAT
+  stage: db-run
+  script:
+  - docker run -d --name land-registry-auth-db --rm -p3306:3306 land-registry-auth-db
+  only:
+  - staging
+
+mvn-jdk-8-uat:
+  tags:
+    - UAT
+  image: maven:3-jdk-8
+  stage: app-package-test
+  script: "./mvnw verify -B"
+  artifacts:
+    paths:
+      - target/*.jar
+  only:
+  - staging
+
+app-build-uat:
+  tags:
+    - UAT
+  stage: app-build
+  script:
+  - docker build -f src/main/docker/uat/Dockerfile . -t land-registry-auth
+  only:
+  - staging
+
+app-deploy-uat:
+  tags:
+    - UAT
+  stage: app-deploy
+  script:
+  - docker run -d --name land-registry-auth --rm -p 9501:3501 --link land-registry-auth-db:db land-registry-auth
+  environment:
+    name: UAT
+    url: http://poc-uat.com:9501/swagger-ui.html
+  only:
+  - staging
+
+cleanup-uat:
+  tags:
+    - UAT
+  allow_failure: true
+  stage: cleanup
+  script:
+  - docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
+  only:
+  - staging
+
+
